@@ -416,3 +416,418 @@ terraform plan -var my_var=var7 -var-my_var=var8
 ```
 
 \*.tfvars와 같은 형식의 내용을 가진 파일이라면 -var-file로 지정할 수 있다.
+
+### 3.7 local
+
+| 코드 내에서 사용자가 지정한 값 또는 속성 값을 가공해 참조 가능한 local(지역 값)은 외부에서 입력되지 않고, 코드 내에서만 가공되어 동작하는 값을 선언!
+
+- `local`은 입력 변수와 달리 선언된 모듈 내에서만 접근 가능하고 변수처럼 실행 시 입력받을 수 없다.
+- 로컬은 사용자가 테라폼 코드를 구현할 때 값이나 표현식을 반복적으로 사용할 수 있는 편의를 제공
+- 빈번하게 여러 곳에서 사용되는 경우 실제 값에 대한 추적이 어려워져 유지 관리 측면에서 부담이 발생할 수 있다.
+
+#### 3.7.1 local 선언
+
+| 로컬이 선언되는 블록은 `locals` 블록을 사용
+
+- 선언되는 인수에 표현되는 값은 상수만이 아닌 리소스의 속성, 변수의 값들도 조합해 정의할 수 있음.
+- 동일한 파일 내에서 여러 번 선언하는 것도 가능
+- 여러 파일에 걸쳐 만드는 것도 가능
+- local에 선언한 변수 이름은 전체 모듈 내에서 고유해야 함
+
+```
+variable "prefix" {
+    default = "hello"
+
+}
+
+locals {
+    name = "terraform"
+    content = "${var.prefix} ${local.name}"
+    my_info = {
+        age = 20
+        region = "KR"
+    }
+    my_nums = [1, 2, 3, 4, 5]
+}
+
+locals {
+    content = "content2" # 중복 선언 -> 오류
+}
+
+.5~3.6 git:(main) ✗ terraform plan
+╷
+│ Error: Duplicate local value definition
+│
+│   on main.tf line 112, in locals:
+│  112:     content = "content2" # 중복 선언 -> 오류
+│
+│ A local value named "content" was already defined at main.tf:103,5-44. Local value names must be unique within a module.
+╵
+```
+
+#### 3.7.2 local 참조
+
+| local 선언된 값은 `locals.<이름>`으로 참조.
+
+- 테라폼 구성 파일을 여러개 생성해 작업하는 경우 -> 서로 다른 파일에 있더라도 다른 파일에서 참조할 수 있음.
+
+  main.tf 파일에서 local 선언된 값을 참조하는 예시
+
+- terraform plan을 실행 -> main.tf의 content 내용의 값으로 local.content 참조
+  -> 장점이자 단점 값의 파편화로 인해 유지 보수가 어려워질 수 있음
+
+```/main.tf
+resource "local_file" "abc" {
+variable "prefix" {
+    default = "hello"
+
+}
+
+locals {
+    name = "terraform"
+}
+
+resource "local_file" "abc" {
+    content = local.content
+    filename = "${path.module}/abc.txt"
+}
+
+sub.tf 파일에서 local 선언된 값을 참조하는 예시
+
+/sub.tf
+locals {
+    content = "{$var.prefix} ${local.name}"
+}
+```
+
+### 3.8 출력
+
+| 출력은 테라폼 코드 내에서 프로비저닝 수행 후의 결과 속성 값을 확인하는 용도로 사용
+
+- 코드 내 요소 간에 제한된 노출을 지원하듯 테라폼 모듈 간, 워크스페이스 간 데이터 접근 요소로도 활욜할 수 있다. - 루트 모듈에서 사용자가 확인하고자 하는 특정 속성 출력 - 자식 모듈의 특정 값을 정의하고 루트 모듈에서 결과를 참조 - 서로 다른 루트 모듈의 결과를 원격으로 읽기 위한 접근 요소
+  > 출력 값을 작성하면 단순한 디버깅을 넘어 속성 값을 노출하고 접근할 수 있음
+
+#### 3.8.1 output 선언
+
+| output 선언은 `output` 블록을 사용
+
+```
+output "instance_ip_addr" {
+    value = "http://${aws_instance.web.private_ip}"
+}
+```
+
+| 출력되는 값은 value 값이며 테라폼이 제공하는 조합과 프로그래밍적인 기능들에 의해 원하는 값을 출력할 수 있음
+
+- 주의할 점 : output 결과에서 리소스 생성 후 결정되는 속성 값은 프로비저닝이 완료 되어야 최종적으로 결과를 확인할 수 있고 `terraform plan` 단계에서는 적용될 값을 출력하기 않는다.
+  output 정의 시 사용 가능한 메타인수
+- description : 출력 값에 대한 설명
+- sensitive : 출력 값을 민감한 정보로 간주하고 출력하지 않음
+- depends_on : value에 담길 값이 특정 구성에 종속성이 있는 경우 생성되는 순서를 임의로 조정
+- precondition : 출력 전에 지정된 조건을 검증
+  | `sensitive` -> 디버깅 목적보다는 값을 노출시키지 않고 상위 모듈 또는 다른 모듈에 참조하기 위한 목적
+
+#### 3.8.2 output 활용
+
+```
+resource "local_file" "abc" {
+    content = "abc123"
+    filename = "${path.module}/abc.txt"
+}
+
+output "file_id" {
+    value = local_file.abc.id
+}
+
+output "file_abspath" {
+    value = abspath(local_file.abc.filename)
+}
+
+... 생략 ...
+Plan: 1 to add, 0 to change, 0 to destroy.
+
+Changes to Outputs:
+  + file_abspath = "/Users/hwangbongsu/Desktop/terraform/3.5~3.6/abc.txt"
+  + file_id      = (known after apply)
+```
+
+- 이미 정해진 속성에 대해서는 출력 가능 -> 아직 생성되지 않은 file_id 같은 값의 경우에는 결과 예측 불가 -> `terraform apply` 실행 시 결과 값으로 출력
+
+```
+terraform apply
+
+... 생략 ...
+Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+file_abspath = "/Users/hwangbongsu/Desktop/terraform/3.5~3.6/abc.txt"
+file_id = "6367c48dd193d56ea7b0baad25b19455e529f5ee"
+```
+
+- apply 실행 이후 구성 재적용 없이 마지막 결과로 표기되는 output 을 다시 확인하고 싶은경우 `terraform output` 명령어 사용
+
+### 3.9 반복문
+
+| list 형태의 값 목록이나 Key-Value 형태의 문자열 집합인 데이터가 있는 경우 동일한 내용에 대해 테라폼 구성 정의를 반복적으로 하지 않고 관리 가능!
+
+#### 3.9.1 count
+
+| 리소스 또는 모듈 블록에서 count 값이 정수인 인수가 포함된 경우 선언된 정수 값만큼 리소스나 모듈을 생성
+
+- `count` 에서 생성되는 참조값은 `count.index`, 반복하는 경우 0부터 + 1씩 증가해 인덱스가 부여됨
+
+```
+resource "local_file" "abc" {
+    count = 5
+    content = "abc"
+    filename = "${path.module}/abc.txt"
+}
+```
+
+| 의도대로라면 파일 5개 생성 -> 파일명 변함 없기에 결과적으론 하나의 파일 존재
+
+- count를 사용하는 경우 반복되는 정의로 인해 문제되는 값이 있는지 주의
+
+```
+resource "local_file" "abc" {
+    count = 5
+    content = "abc"
+    filename = "${path.module}/abc${count.index}.txt"
+}
+```
+
+| 때때로 여러 리소스나 모듈의 count로 지정되는 수량이 동일해야 하는 상황 존재 -> 이 경우 count에 부여되는 정수 값을 외부 변수에 식별되도록 구성할 수 있다.
+
+```
+ variable "names" {
+    type = list(string)
+    default = ["a", "b", "c"]
+ }
+
+resource "local_file" "abc" {
+    count = length(var.names)
+    content = "abc"
+    filename = "${path.module}/abc-${var.names[count.index]}.txt"
+}
+
+resource "local_file" "def" {
+    count = length(var.names)
+    content = local_file.abc[count.index].content
+    filename = "${path.module}/def-${element(var.names, count.index)}.txt"
+}
+```
+
+| `local_file.abc`와 `local_file.def`는 var.names에 선언되는 값에 영향을 받아 동일한 개수 만큼 생성 X
+
+- `local_file.def`의 경우 `local_file.abc`와 개수가 같아야 content에 선언되는 인수 값에 오류가 없을 것
+- `count`로 생성되는 리소스의 경우 `<리소스 타입>.<이름>[<인덱스 번호>]`, 모듈의 경우 `module.<모듈 이름>[<인덱스 번호>]`으로 참조 가능
+  -> 단 `module`내에 `count` 적용이 불가능한 선언이 있으므로 주의
+
+#### 3.9.2 for_each
+
+| 리소스 또는 모듈 블록에서 for_each 값이 map 또는 set 이면, 선언된 key 값 개수만큼 리소스르 생성하게 됨
+
+```
+resource "local_file" "abc" {
+    for_each = {
+        a = "content a"
+        b = "content b"
+
+    }
+    content = each.value
+    filename = "${path.module}/${each.key}.txt"
+}
+```
+
+| `for_each` 블록 -> `each` 속성을 사용해 구성을 수정할 수 있음
+
+- each.key : 이 인스턴스에 해당하는 map 타입의 key 값
+- each.value : 이 인스턴스에 해당하는 map 타입의 value 값
+
+- 생성되는 리소스의 경우 <리소스 타입>.<이름>[<key>]
+- 모듈의 경우 module.<모듈 이름>[<key>]으로 해당 리소스의 값을 참조 가능
+  이 참조 방식을 통해 리소스 간 종속성을 정의하기도 하고 변수로 다른 리소스에서 사용하거나 출력을 위한 결과 값으로 사용한다.
+
+```
+variable "names" {
+    default = {
+        a = "content a"
+        b = "content b"
+        c = "content c"
+    }
+}
+resource "local_file" "abc" {
+    for_each = var.names
+    content = each.value
+    filename = "${path.module}/abc-${each.key}.txt"
+}
+
+resource "local_file" "def" {
+    for_each = local_file.abc
+    content = each.value.content
+    filename = "${path.module}/def-${each.key}.txt"
+}
+
+variable "names" {
+    default = {
+        a = "content a"
+        c = "content c"
+    }
+}
+resource "local_file" "abc" {
+    for_each = var.names
+    content = each.value
+    filename = "${path.module}/abc-${each.key}.txt"
+}
+
+resource "local_file" "def" {
+    content = each.value.content
+    for_each = local_file.abc
+    filename = "${path.module}/def-${each.key}.txt"
+}
+local_file.def["b"]: Destroying... [id=eae49f039c8416479f1c63b883f96fc39fe3d7c6]
+local_file.def["b"]: Destruction complete after 0s
+local_file.abc["b"]: Destroying... [id=eae49f039c8416479f1c63b883f96fc39fe3d7c6]
+local_file.abc["b"]: Destruction complete after 0s
+
+Apply complete! Resources: 0 added, 0 changed, 2 destroyed.
+```
+
+| key값은 count의 index와 달리 고유하므로 중간에 값을 삭제한 후 다시 적용해도 삭제한 값에 대해서만 리소스를 삭제함.
+
+- key에 해당하는 리소스만 영향을 받아 삭제됨
+- 인덱스에 영향을 바디 않도록 구성한다면 list대신 set을 활요해 작성함으로써 중간 값의 삭제로 인해 다른 리소스가 삭제되는 것을 방지 가능
+
+```
+resource "local_file" "abc" {
+    for_each = toset(["a", "b", "c"])
+    content = "abc"
+    filename = "${path.module}/abc-${each.key}.txt"
+}
+```
+
+#### 3.9.3 for
+
+| for 문은 복합 형식 값의 형태를 변환하는데 사용된다.
+
+- ex) list 값의 포맷을 변경하거나 특정 접두사를 추가할 수 있고, output에 원하는 형태로 반복적인 결과를 표현할 수 있다.
+
+  - `list` 타입의 경우 `값` 또는 `인덱스`와 `값`을 반환
+  - `map` 타입의 경우 `key`또는 `key`와 `값`에 대해 반환
+  - `set` 타입의 경우 `key` `값`에 대해 반환
+
+```
+variable "names" {
+    default = ["a", "b", "c"]
+
+}
+
+# resource "local_file" "abc" {
+#     content = jsonencode(var.names)
+#     filename = "${path.module}/abc.txt"
+# }
+resource "local_file" "abc" {
+    content = jsonencode([for s in var.names : upper(s)])
+    filename = "${path.module}/abc.txt"
+}
+```
+
+| for 구문 규칙
+
+- `list` 유형의 경우 반환 받는 값이 하나로 되어 있으면 값을, 두 개인 경우 앞의 인수가 인덱스를 반환하고 뒤의 인수가 값을 반환 (관용적으로 인덱슨느 i, 값은 v로)
+- `map` 유형의 경우 반환 받는 값이 하나로 되어 있으면 키를 두 개인 경우 앞의 인수가 키를 반환하고 뒤에 인수가 값을 반환 (관용적으로 키는 k, 값은 v로)
+- 결과 값은 `for` 문을 묶는 기호가 [] 인 경우 tuple로 반환되고 {} 인 경우 object로 형태로 반환
+- object 형태의 경우 키와 값에 대한 쌍은 => 기호로 구분
+- {} 형식을 사용해 object 형태로 결과를 반환하는 경우 키 값은 고유해야 하므로 값 뒤에 그룹화 모드 심볼 (...)를 붙여서 키의 중복을 방지
+- if 구문을 추가해 조건 부여 가능
+
+```
+variable "names" {
+  type = list(string)
+  default = ["a", "b"]
+}
+
+output "A_upper_value" {
+    value = [for s in var.names : upper(s)]
+}
+
+output "B_index_and_value" {
+    value = [for i, v in var.names: "${i} => ${v}"]
+}
+
+output "C_make_objcet" {
+    value = {for s in var.names : s => upper(s)}
+}
+
+output "D_with_filter" {
+    value = [for v in var.names: upper(v) if v!= "a"]
+}
+
+Apply complete! Resources: 0 added, 0 changed, 1 destroyed.
+Outputs:
+A_upper_value = [
+  "A",
+  "B",
+]
+B_index_and_value = [
+  "0 => a",
+  "1 => b",
+]
+C_make_objcet = {
+  "a" = "A"
+  "b" = "B"
+}
+D_with_filter = [
+  "B",
+]
+```
+
+| map 유형에 대한 for 구문 처리의 몇 가지 예를 확인하기 위해 다음과 같이 main.tf 파일을 수정
+
+```
+variable "members" {
+    type = map(object({
+        role = string
+    }))
+    default = {
+        ab = {role = "member", group = "dev"}
+        cd = {role = "admin", group = "dev"}
+        ef = {role = "member", group = "obs"}
+    }
+}
+
+output "A_to_tuple" {
+    value = [for k, v in var.members : "${k} is ${v.role}"]
+}
+
+output "B_get_only_role" {
+    value = {
+        for name, user in var.members: name => user.role
+        if user.role == "admin"
+    }
+}
+
+output "C_group" {
+    value = {
+        for name, user in var.members: user.role => name...
+    }
+}
+A_to_tuple = [
+  "ab is member",
+  "cd is admin",
+  "ef is member",
+]
+B_get_only_role = {
+  "cd" = "admin"
+}
+C_group = {
+  "admin" = [
+    "cd",
+  ]
+  "member" = [
+    "ab",
+    "ef",
+  ]
+}
+```
