@@ -265,30 +265,264 @@
 #     value = [for v in var.names: upper(v) if v!= "a"]
 # }
 
-variable "members" {
-    type = map(object({
-        role = string
-    }))
-    default = {
-        ab = {role = "member", group = "dev"}
-        cd = {role = "admin", group = "dev"}
-        ef = {role = "member", group = "obs"}
+# variable "members" {
+#     type = map(object({
+#         role = string
+#     }))
+#     default = {
+#         ab = {role = "member", group = "dev"}
+#         cd = {role = "admin", group = "dev"}
+#         ef = {role = "member", group = "obs"}
+#     }
+# }
+
+# output "A_to_tuple" {
+#     value = [for k, v in var.members : "${k} is ${v.role}"]
+# }
+
+# output "B_to_object" {
+#     value = {
+#         for name, user in var.members: name => user.role
+#         if user.role == "admin"
+#     }
+# }
+
+# output "C_group" {
+#     value = {
+#         for name, user in var.members: user.role => name...
+#     }
+# }
+
+# resource "aws_security_group" "allow_tls" {
+#     name = "allow_tls"
+#     description = "Allow TLS inbound traffic"
+#     ingress {
+#         description = "TLS from VPC"
+#         from_port = 443
+#         to_port = 443
+#         protocol = "tcp"
+#         cidr_blocks = [aws_vpc.main.cibr_block]
+#         ipv6_cidr_blocks = [aws_vpc.main.ipv6_cidr_block]
+#     }
+#     ingress {
+#         description = "HTTP"
+#         from_port = 8080
+#         to_port = 8080
+#         protocol = "tcp"
+#         cidr_blocks = [aws_vpc.main.cibr_block]
+#         ipv6_cidr_blocks = [aws_vpc.main.ipv6_cidr_block]
+#     }
+#     egress {
+#         from_port = 0
+#         to_port = 0
+#         protocol = "-1"
+#         cidr_blocks = ["0.0.0.0/0"]
+#         ipv6_cidr_blocks = ["::/0"]
+#     }
+#     tags = {
+#         Name = "allow_tls"
+#     }
+# }
+
+# # 일반적인 블록 속성 반복 적용
+# resource "provider_resource" "name" {
+#     name = "some_resource"
+
+#     some_setting = {
+#         key = a_value
+#     }
+#     some_setting = {
+#         key = b_value
+#     }
+#     some_setting = {
+#         key = c_value
+#     }
+#     some_setting = {
+#         key = d_value
+#     }
+# }
+
+# # dynamic 블록 적용
+# resource "provider_resource" "name" {
+#     name = "some_resource"
+
+#     dynamic "some_setting" {
+#         for_each = {
+#             a_key = a_value
+#             b_key = b_value
+#             c_key = c_value
+#             d_key = d_value
+#         }
+#         content {
+#             key = some_setting.value
+#         }
+#     }
+# }
+
+
+# data "archive_file" "dotfiles" {
+#     type = "zip"
+#     output_path = "${path.module}/dotfiles.zip"
+#     source {
+#         content = "hello a"
+#         filename = "${path.module}/a.txt"
+#     }
+#     source {
+#         content = "hello b"
+#         filename = "${path.module}/b.txt"
+#     }
+#     source {
+#         content = "hello c"
+#         filename = "${path.module}/c.txt"
+#     }
+# }
+
+### 3.9.4 dynamic
+# variable "names" {
+#     default = {
+#         a = "hello d"
+#         b = "hello f"
+#         c = "hello g"
+#     }
+# }
+
+# data "archive_file" "dotfiles" {
+#     type = "zip"
+#     output_path = "${path.module}/dotfiles.zip"
+
+#     dynamic "source" {
+#         for_each = var.names
+#         content {
+#             content = source.value
+#             filename = "${path.module}/${source.key}.txt"
+#         }
+#     }
+# }
+
+### 3.10 조건식
+
+# variable "enable_file" {
+#     default = true
+# }
+
+# resource "local_file" "foo" {
+#     count = var.enable_file ? 4 : 0
+#     content = "foo!"
+#     filename = "${path.module}/foo.bar"
+# }
+# output "content" {
+#     value = var.enable_file ? local_file.foo[0].content : "123"
+# }
+
+# resource "local_file" "foo" {
+#     content = upper("foo!")
+#     filename = "${path.module}/foo.bar"
+# }
+
+### 3.12.2 local_exec 프로비저너
+
+# # Unix/Linux/MacOs
+# resource "null_resource" "example1" {
+#     provisioner "local-exec" {
+#         command = <<EOF
+#         echo Hello!! > file.txt
+#         echo $ENV >> file.txt
+#         EOF
+#         interpreter = ["bash", "-c"]
+
+#         working_dir = "/tmp"
+
+#         environment = {
+#             ENV = "world!"
+#         }
+#     }
+# }
+
+# # Windows
+# resource "null_resource" "example2" {
+#     provisioner "local-exec" {
+#         command = <<EOF
+#         Hello!! > file.txt
+#         Get-ChildItem Env:ENV >> file.txt
+#         EOF
+#         interpreter = ["powershell", "-command"]
+#         working_dir = "C:\\windows\\temp"
+#         environment = {
+#             ENV = "world!"
+#         }
+#     }
+# }
+
+# resource "null_resource" "example1" {
+#     connection {
+#         type = "ssh"
+#         user = "root"
+#         password = var.root_password
+#         host = var.host
+#     }
+
+#     provisioner "file" {
+#         source = "conf/myapp.conf"
+#         destination = "/etc/myapp.conf"
+#     }
+
+#     provisioner "file" {
+#         source = "conf/myapp.conf"
+#         destination = "C:/App/myapp.conf"
+
+#         connection {
+#           type = "winrm"
+#           user = "Administrator"
+#           password = var.admin_password
+#           host = var.host
+#         }
+#     }
+# }
+
+# resource "null_resource" "foo" {
+#     # myapp.conf 파일이 /etc/myapp.conf 로 업로드
+#     provisioner "file" {
+#         source = "conf/myapp.conf"
+#         destination = "/etc/myapp.conf"
+#     }
+
+#     #content의 내용이 /tmp/file.log 파일로 생성
+#     provisioner "file" {
+#         content = "ami used : ${self.ami}"
+#         destination = "/tmp/file.log"
+#     }
+
+#     # configs.d 디렉토리가 /etc/configs.d 로 업로드
+#     provisioner "file" {
+#         source = "conf/configs.d/"
+#         destination = "/etc"
+#     }
+#     # apps/app1 디렉토리 내의 파일들만 D:/IIS/webapp1 디렉토리 내에 업로드
+#     provisioner "file" {
+#         source = "apps/app1/"
+#         destination = "D:/IIS/webapp1"
+#     }
+# }
+
+resource "aws_instance" "web" {
+    # ...
+
+    connection {
+        type = "ssh"
+        user = "root"
+        password = var.root_password
+        host = self.public_ip
     }
-}
 
-output "A_to_tuple" {
-    value = [for k, v in var.members : "${k} is ${v.role}"]
-}
-
-output "B_to_object" {
-    value = {
-        for name, user in var.members: name => user.role
-        if user.role == "admin"
+    provisioner "file" {
+        source = "script.sh"
+        destination = "/tmp/script.sh"
     }
-}
 
-output "C_group" {
-    value = {
-        for name, user in var.members: user.role => name...
+    provisioner "remote-exec" {
+        inline = [
+            "chmod +x /tmp/script.sh",
+            "/tmp/script.sh args",
+        ]
     }
 }
