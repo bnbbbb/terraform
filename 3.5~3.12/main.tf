@@ -504,25 +504,25 @@
 #     }
 # }
 
-resource "aws_instance" "web" {
-    # ...
+# resource "aws_instance" "web" {
+#     # ...
 
-    connection {
-        type = "ssh"
-        user = "root"
-        password = var.root_password
-        host = self.public_ip
-    }
+#     connection {
+#         type = "ssh"
+#         user = "root"
+#         password = var.root_password
+#         host = self.public_ip
+#     }
 
-    provisioner "file" {
-        source = "script.sh"
-        destination = "/tmp/script.sh"
-    }
+#     provisioner "file" {
+#         source = "script.sh"
+#         destination = "/tmp/script.sh"
+#     }
 
-    provisioner "remote-exec" {
-        inline = [
-            "chmod +x /tmp/script.sh",
-            "/tmp/script.sh args",
-        ]
-    }
-}
+#     provisioner "remote-exec" {
+#         inline = [
+#             "chmod +x /tmp/script.sh",
+#             "/tmp/script.sh args",
+#         ]
+#     }
+# }
