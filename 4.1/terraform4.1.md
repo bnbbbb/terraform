@@ -198,3 +198,98 @@ terraform {
 #### 4.2.4 기타 솔루션
 
 > 인프라 환경의 F5, Cisco의 네트워크 장비, Fortinet, Palo Alto의 하드웨어 방화벽, Netapp 스토리지, Elastic Stack, Splunk, Newrelic, Grafana의 모니터링 도구 등 API를 제공하는 각 솔루션 또한 테라폼 프로바이더가 제공되어 솔루션에 대한 설정이 가능하고 여러 프로버이더를 사용하여 연계된 프로비저닝을 수행할 수 있다.
+
+### 4.3 프로바이더 경험해보기
+
+> 하시코프에서 제공하는 하시코프 개발자 사이트에서는 테라폼을 포함한 하시코프의 솔루션을들 시작하고 사용하는 방법을 가이드하고 있다.
+
+- 대표적인 클라우드 서비스 프로바이더인 AWS, Azure, GCP, Oracle Cloud 환경과 로컬의 Docker 관리가 실습을 위해 준비되어 있다.
+- 국내의 NHN 클라우드, 네이버 클라우드, 삼성 클라우드 플랫폼 등 퍼블릭 클라우드 환경에 맞춰 각 클라우드 제공사가 테라폼 프로바이더를 배포하고 있다.
+- 클라우드는 설계 단계에서 대부분의 리소스 구성에 대해 API 기반을 고려하기 때문에 테라폼으로 풍부한 리소스 구성이 가능합니다.
+
+#### 4.3.1 AWS
+
+> EC2, Lambda, EKS, ECS, VPC, S3, RDS, DynamoDB 등의 AWS 리소스를 관리하는 AWS 프로바이더는 클라우드 시장에서 점유율이 높고, 예제 또한 많이 제공한다.
+> AWS는 회원가입 후 12개월 동안 특정 사용량에 대해 무료 사용이 가능한 리소스를 제공하고 있다.
+
+- 테라폼으로 AWS를 프로비저닝하려면, 가입된 계정의 API를 위한 자격증명 정보가 필요함
+- AWS의 계정 `Access Key`, `Secret Access Key`가 필요
+
+  > 1. https://console.aws.amazone/iam/에서 IAM 콘솔을 연다.
+  > 2. 탐색 메뉴에서 사용자를 선택
+  > 3. IAM 사용자 이름을 선택한다.
+  > 4. Security credentials(보안 자격 증명)탭을 연 다음 Create access key(엑세스 키 만들기)를 선택한다.
+  > 5. 새 Access Key를 보려면 Show를 선택 ->
+
+  - Access Key : AKIA~~~~~~
+  - Secret Access Key : wjarlXut\***\*\*\*\*\***dqklda
+
+  > 6. 키 페어 파일을 다운로드하려면 Download.csv file을 선택한다. 안전한 위치에 키와 함께 .csv 파일을 저장한다.
+
+- 처음 생성된 사용자는 관리자로 모든 권한이 있다는 것에 주의해야 하며, 실제로 운영할 때에는 사용자를 별도 생성하고 적절한 권한을 부여해 사용하는 것을 권장한다.
+- 또한 AWS의 주의 사항처럼 발급된 키는 외부로 노출되지 않도록 주의해야 하며 security access key는 재확인이 불가능하다.
+
+> 발급받은 자격증명을 AWS 프로바이더에서 사용하기 위해서는 환경 변수, 파일, 테라폼 구성에 추가하는 각각의 방식으로 사용 가능하며, 여기서는 작업자 실행 환경과 무관하도록 테라폼 구성에 추가하는 방식으로 확인한다.
+> AWS 프로비저닝을 위해 다음과 같이 main.tf를 작성
+
+```
+terraform {
+  required_providers {
+    aws = {
+      source = "hashicorp/aws"
+      version = "~> 4.0"
+    }
+  }
+
+  required_version = "~> 1.0"
+}
+
+provider "aws" {
+  region = "ap-northeast-2"
+  access_key = "<my-access-key>"
+  secret_key = "<my-secret-key>"
+}
+
+data "aws_ami" "amzn2" {
+  most_recent = true
+  owners = ["amazon"]
+  filter {
+    name = "owner-alias"
+    values = ["amazon"]
+  }
+  filter {
+    name = "name"
+    values = ["amzn2-ami-hvm*"]
+  }
+}
+resource "aws_instance" "app_server" {
+  ami = data.aws.ami.amzn2.id
+  instance_type = "t3.micro"
+
+  tags = {
+    Name = "ExampleAppServerInstance"
+  }
+
+}
+```
+
+- `terraform init`과 `terraform apply`를 실행해 정상적으로 실행 계획을 생성하는지 확인
+- aws_instance가 생성되고 실행중인지 확인
+- `terraform destro` 실행 -> aws_instance 삭제 되는지 확인
+
+**자격증명 환경변수 관리**
+
+```
+... 생략
+provider "aws" {
+  region = "ap-northeast-2"
+  <!-- access_key = "<my-access-key>" 삭제 -->
+  <!-- secret_key = "<my-secret-key>" 삭제 -->
+}
+... 생략
+
+export AWS_ACCESS_KEY_ID=<my-access-key>
+export AWS_SECRET_ACCESS_KEY_ID=<my-secret-key>
+```
+
+### Azure GCP 제외

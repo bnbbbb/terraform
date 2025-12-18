@@ -40,12 +40,54 @@
 #     instance_type = "t3.micro"
 # }
 
-### 4.1.3
+# ### 4.1.3
+# terraform {
+#   required_providers {
+#     <프로바이더 로컬 이름> =  {
+#         source = [<호스트 수조>/]<네임스페이스>/<유형>
+#         version = [<버전 제약>]
+#     }
+#   }
+# }
+
+### 4.3.1 AWS
 terraform {
   required_providers {
-    <프로바이더 로컬 이름> =  {
-        source = [<호스트 수조>/]<네임스페이스>/<유형>
-        version = [<버전 제약>]
+    aws = {
+      source = "hashicorp/aws"
+      version = "~> 4.0"
     }
   }
+
+  required_version = "~> 1.0"
 }
+
+provider "aws" {
+  region = "ap-northeast-2"
+  access_key = "<my-access-key>"
+  secret_key = "<my-secret-key>"
+}
+
+data "aws_ami" "amzn2" {
+  most_recent = true
+  owners = ["amazon"]
+  filter {
+    name = "owner-alias"
+    values = ["amazon"]
+  }
+  filter {
+    name = "name"
+    values = ["amzn2-ami-hvm*"]
+  }
+}
+resource "aws_instance" "app_server" {
+  ami = data.aws.ami.amzn2.id
+  instance_type = "t3.micro"
+
+  tags = {
+    Name = "ExampleAppServerInstance"
+  }
+  
+}
+
+
