@@ -173,3 +173,74 @@ Plan: 0 to add, 0 to change, 1 to destroy.
 > 기본 사용법: terrafomr [global options] workspace
 
 사용 중인 워크스페이스 확인을 위해 terraform workspace list 명령으로 확인해보면 기본 default 외에 다른 워크스페이스는 없고 사용 중인 워크스페이스임을 나타내기 위해 앞에 \* 기호가 붙어 있다.
+
+```
+➜  terraform git:(main) terraform workspace list
+* default
+```
+
+- `State`가 워크스페이스상에서 관리되는 방식을 확인하기 위해 다음 페이지의 [코드 5-4] 처럼 main.tf를 새로 작성
+- `terraform init`과 `terraform apply`를 수행해 `default` 워크스페이스의 테라폼 리소스를 생성한다.
+- `terraform plan`을 다시 수행하면 구성에 변경이 없고 State의 리소스 구성 정보가 같으므로 변경 사항이 없다는 메시지를 출력할 것이다.
+
+```
+# AWS 프로바이더 선언 생략
+resource "aws_instance" "web" {
+  ami = "ami-0c55b159cbfafe1f0"
+  instance_type = "t3.micro"
+
+  tags = {
+    Name = "HelloWorld"
+  }
+
+}
+
+➜  5.1 git:(main) ✗ terraform workspace new myworkspace1
+Created and switched to workspace "myworkspace1"!
+```
+
+새로운 워크스페이스가 생성되면 실행한 루트 모듈 디렉토리에 terraform.tfstate.d 디렉토리가 생성되고 하위에 생성한 워크스페이스 이름이 있는 것을 확인가능
+
+```
+➜  5.1 git:(main) ✗ terraform workspace show
+myworkspace1
+```
+
+- `plan`을 수행하면 새로 생성한 워크스페이스에서는 기존 default 워크 스페이스에서 관리하는 State와 독립된 정보를 갖기 때문에 앞서 정의한 테라폼 구성의 리소스를 다시 생성하겠다고 출력함
+
+- `terraform apply`를 수행해 결과 확인 -> terraform.tfstate.d의 워크 스페이스의 이름의 디렉토리에 새로운 terraform.tfstate가 생성됨을 확인할 수 있다.
+  이렇게 워크스페이스를 구분하면 동일한 구성에서 기존 인프라에 영향을 주지 않으면서 간편하게 테라폼 프로비저닝을 테스트하고 확인할 수 있다. 또한 테라폼 구성에서 terraform.workspace를 사용하여 워크스페이스 이름을 읽으면 워크스페이스 기준으로 문자열을 지정하거나 조건을 부여할 수 있음.
+
+```
+resource "aws_instance" "web" {
+  count = "${terraform.workspace == "default" ? 5: 1}"
+  ami = "ami-0c55b159cbfafe1f0"
+  instance_type = "t3.micro"
+
+  tags = {
+    Name = "HelloWorld-${terraform.workspace}"
+  }
+
+}
+```
+
+- `Plan`과 `Apply` 단계에서 특정 워크스페이스의 State를 지정할 수 있다. default 워크스페이스로 전환하고 생성한 워크스페이스의 State를 지정해 destroy를 실행한다.
+- `yes`를 입력하기전에 지정한 State와 같은 위치에 .terraform.tfstate.lock.info가 생성되는 것을 확인해본다.
+- 삭제 후 State를 지정하지 않고 destroy를 수행하면 현재 지정된 default 워크스페이스의 State를 읽으므로 다시 삭제할 대상이 나타난다.
+
+> 다수의 워크스페이스 사용시 장점
+
+- 하나의 루트모듈에서 다른 환경을 위한 리소스를 동일한 테라폼 구성으로 프로비저닝하고 관리
+- 기존 프로비저닝된 환경에 영향을 주지 않고 변경 사항 실험 가능
+- 깃의 브랜치 전략처럼 동일한 구성에서 서로 다른 리소스 결과 관리
+
+> 다수의 워크스페이스 사용시 단점
+
+- State가 동일한 저장소(로컬 또는 백엔드)에 저장되어 State 접근 권한 관리가 불가능
+- 모든 환경이 동일한 리소스를 요구하지 않을 수 있어 테라폼 구성에 분기 처리가 다수 발생할 수 있음
+- 프로비저닝 대상에 대한 인증 요소를 완벽히 분리하기 어려움
+
+> 워크스페이스의 단점은 완벽한 격리가 불가능하다는 점.
+> 이 문제는 운영 환경을 위한 구성 또는 다수의 구성원이 테라폼으로 프로비저닝을 하는 상황에서 불거진다.
+> 해결하기 위해 루트 모듈을 별도로 구성하는 디렉토리 기반의 레이아웃을 사용할 수 있음.
+> 시스템적으로 보완하기 바란다면 HCP Terraform 환경의 워크스페이스를 활용하는 쪽을 권장한다.
